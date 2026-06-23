@@ -3,10 +3,12 @@ import 'dart:math' show min;
 import 'dart:ui';
 
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:PiliPlus/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
+import 'package:PiliPlus/grpc/video.dart';
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -51,17 +53,21 @@ import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/accounts/account.dart';
+import 'package:PiliPlus/utils/accounts/account_manager/account_mgr.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/utils/playurl_merge.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/utils/video_quality_menu.dart';
 import 'package:PiliPlus/utils/video_utils.dart';
 import 'package:collection/collection.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
@@ -112,6 +118,14 @@ class VideoDetailController extends GetxController
   final Rxn<VideoQuality> currentVideoQa = Rxn<VideoQuality>();
   AudioQuality? currentAudioQa;
   late VideoDecodeFormatType currentDecodeFormats;
+  final Set<int> _appMediaHeaderQualities = <int>{};
+
+  Map<String, String>? _appMediaHeaders() {
+    final cookies = AccountManager.getCookies(
+      Accounts.video.cookieJar.toList(),
+    );
+    return cookies.isEmpty ? null : {'Cookie': cookies};
+  }
 
   // 是否开始自动播放 存在多p的情况下，第二p需要为true
   final RxBool _autoPlay = Pref.autoPlayEnable.obs;
@@ -190,6 +204,26 @@ class VideoDetailController extends GetxController
   void refreshPage() {
     if (scrollKey.currentState?.mounted ?? false) {
       (scrollKey.currentState!.context as Element).markNeedsBuild();
+    }
+  }
+
+  void resetVideoHeaderForFullScreen() {
+    scrollRatio.value = 0;
+    isExpanding = false;
+    isCollapsing = false;
+    if (animationController.isAnimating) {
+      animationController.stop();
+    }
+    if (_scrollCtr?.hasClients == true) {
+      scrollCtr.jumpTo(0);
+    }
+    final state = scrollKey.currentState;
+    if (state?.mounted ?? false) {
+      final outerController = state!.outerController;
+      if (outerController.hasClients) {
+        outerController.jumpTo(0);
+      }
+      (state.context as Element).markNeedsBuild();
     }
   }
 
@@ -725,6 +759,73 @@ class VideoDetailController extends GetxController
     playerInit();
   }
 
+  Future<bool> changeVideoQuality(
+    VideoQuality newQa, {
+    bool trial = false,
+  }) async {
+    final quality = newQa.code;
+    plPlayerController.cacheVideoQa = quality;
+
+    final hasCurrentStream =
+        data.dash?.video?.any((item) => item.quality.code == quality) ?? false;
+    if (trial &&
+        isTrialVideoQuality(quality) &&
+        await _tryLoadTrialVideoQuality(newQa)) {
+      return true;
+    }
+
+    if (hasCurrentStream) {
+      currentVideoQa.value = newQa;
+      updatePlayer();
+      return true;
+    }
+
+    _autoPlay.value = true;
+    playedTime = plPlayerController.position;
+    if (isTrialVideoQuality(quality) &&
+        await _tryLoadTrialVideoQuality(newQa)) {
+      return true;
+    }
+    await queryVideoUrl(fromReset: true, qn: quality);
+    return currentVideoQa.value?.code == quality;
+  }
+
+  Future<bool> _tryLoadTrialVideoQuality(VideoQuality newQa) async {
+    if (!await _loadTrialVideoQuality(newQa)) {
+      return false;
+    }
+    currentVideoQa.value = newQa;
+    updatePlayer();
+    return true;
+  }
+
+  Future<bool> _loadTrialVideoQuality(VideoQuality newQa) async {
+    if (!isUgc || isFileSource) {
+      return false;
+    }
+
+    final result = await VideoGrpc.playView(
+      aid: aid,
+      cid: cid.value,
+      qn: newQa.code,
+      voiceBalance: plPlayerController.enableAudioNormalization,
+    );
+    if (result case Success(:final response)) {
+      final merged = mergePlayUrlDashStreams(
+        current: data,
+        incoming: response,
+        quality: newQa.code,
+      );
+      if (!merged) {
+        return false;
+      }
+      _appMediaHeaderQualities.add(newQa.code);
+      return true;
+    }
+
+    return false;
+  }
+
   Future<void>? _initPlayerIfNeeded(bool autoFullScreenFlag) {
     if (_autoPlay.value ||
         (plPlayerController.preInitPlayer && !plPlayerController.processing) &&
@@ -757,6 +858,20 @@ class VideoDetailController extends GetxController
           : NetworkSource(
               videoSource: videoUrl!,
               audioSource: audioUrl,
+              userAgent:
+                  _appMediaHeaderQualities.contains(currentVideoQa.value?.code)
+                  ? Constants.userAgentPink
+                  : null,
+              referer:
+                  _appMediaHeaderQualities.contains(currentVideoQa.value?.code)
+                  ? ''
+                  : null,
+              headers:
+                  _appMediaHeaderQualities.contains(
+                    currentVideoQa.value?.code,
+                  )
+                  ? _appMediaHeaders()
+                  : null,
             ),
       seekTo: seek,
       duration: data.timeLength == null
@@ -820,6 +935,7 @@ class VideoDetailController extends GetxController
   Future<void> queryVideoUrl({
     bool fromReset = false,
     bool autoFullScreenFlag = false,
+    int? qn,
   }) async {
     if (isFileSource) {
       return _initPlayerIfNeeded(autoFullScreenFlag);
@@ -849,12 +965,14 @@ class VideoDetailController extends GetxController
       seasonId: seasonId,
       tryLook: plPlayerController.tryLook,
       videoType: _actualVideoType ?? videoType,
+      qn: qn,
       language: currLang.value,
       voiceBalance: plPlayerController.enableAudioNormalization,
     );
 
     if (result case Success(:final response)) {
       data = response;
+      _appMediaHeaderQualities.clear();
 
       languages.value = data.language?.items;
       currLang.value = data.curLanguage;
@@ -912,6 +1030,10 @@ class VideoDetailController extends GetxController
         }
         isQuerying = false;
         return;
+      }
+      final preferredVideoQa = qn ?? plPlayerController.cacheVideoQa;
+      if (shouldLoadTrialVideoQuality(data, preferredVideoQa)) {
+        await _loadTrialVideoQuality(VideoQuality.fromCode(preferredVideoQa!));
       }
       final List<VideoItem> videoList = data.dash!.video!;
       // if (kDebugMode) debugPrint("allVideosList:${allVideosList}");

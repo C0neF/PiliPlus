@@ -64,6 +64,7 @@ import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/utils/video_quality_menu.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
@@ -150,6 +151,23 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   Offset? _initialFocalPoint;
 
   bool _pauseDueToPauseUponEnteringBackgroundMode = false;
+
+  Future<void> _triggerFullScreen({
+    required bool status,
+    bool inAppFullScreen = false,
+    DeviceOrientation? orientation,
+    bool isManualFS = true,
+  }) async {
+    if (status && PlatformUtils.isMobile) {
+      widget.videoDetailController?.resetVideoHeaderForFullScreen();
+    }
+    await plPlayerController.triggerFullScreen(
+      status: status,
+      inAppFullScreen: inAppFullScreen,
+      orientation: orientation,
+      isManualFS: isManualFS,
+    );
+  }
 
   StreamSubscription? _brightnessListener;
   void _onBrightnessChanged(double value) {
@@ -809,40 +827,38 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           if (videoInfo.dash == null) {
             return const SizedBox.shrink();
           }
-          final videoFormat = videoInfo.supportFormats!;
-          final totalQaSam = videoFormat.length;
-          final usefulQaSam = videoInfo.dash!.video!
-              .map((i) => i.id)
-              .toSet()
-              .length;
+          final videoFormat = buildVideoQualityMenuEntries(videoInfo);
+          if (videoFormat.isEmpty) {
+            return const SizedBox.shrink();
+          }
           return PopupMenuButton<int>(
             tooltip: '画质',
             requestFocus: false,
             initialValue: currentVideoQa.code,
             color: Colors.black.withValues(alpha: 0.8),
             itemBuilder: (context) {
-              return List.generate(
-                totalQaSam,
-                (index) {
-                  final item = videoFormat[index];
-                  final enabled = index >= totalQaSam - usefulQaSam;
+              return videoFormat.map(
+                (item) {
                   return PopupMenuItem<int>(
-                    enabled: enabled,
+                    enabled: item.enabled,
                     height: 35,
                     padding: const EdgeInsets.only(left: 15, right: 10),
-                    value: item.quality,
+                    value: item.popupValue,
                     onTap: () async {
                       if (currentVideoQa.code == item.quality) {
                         return;
                       }
-                      final int quality = item.quality!;
+                      final int quality = item.quality;
                       final newQa = VideoQuality.fromCode(quality);
-                      videoDetailController
-                        ..plPlayerController.cacheVideoQa = newQa.code
-                        ..currentVideoQa.value = newQa
-                        ..updatePlayer();
+                      final changed = await videoDetailController
+                          .changeVideoQuality(newQa, trial: item.isTrial);
 
-                      SmartDialog.showToast("画质已变为：${newQa.desc}");
+                      if (!changed) {
+                        SmartDialog.showToast('${item.label}暂不可用');
+                        return;
+                      }
+
+                      SmartDialog.showToast('画质已变为：${newQa.desc}');
 
                       // update
                       if (!plPlayerController.tempPlayerConf) {
@@ -855,8 +871,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                       }
                     },
                     child: Text(
-                      item.newDesc ?? '',
-                      style: enabled
+                      item.label,
+                      style: item.enabled
                           ? const TextStyle(color: Colors.white, fontSize: 13)
                           : const TextStyle(
                               color: Color(0x62FFFFFF),
@@ -865,7 +881,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     ),
                   );
                 },
-              );
+              ).toList();
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -886,9 +902,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         icon: isFullScreen
             ? const Icon(Icons.fullscreen_exit, size: 24, color: Colors.white)
             : const Icon(Icons.fullscreen, size: 24, color: Colors.white),
-        onTap: () =>
-            plPlayerController.triggerFullScreen(status: !isFullScreen),
-        onSecondaryTap: () => plPlayerController.triggerFullScreen(
+        onTap: () => _triggerFullScreen(status: !isFullScreen),
+        onSecondaryTap: () => _triggerFullScreen(
           status: !isFullScreen,
           inAppFullScreen: true,
         ),
@@ -1076,7 +1091,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       double cumulativeDy = details.localFocalPoint.dy - _initialFocalPoint!.dy;
 
       void fullScreenTrigger(bool status) {
-        plPlayerController.triggerFullScreen(status: status);
+        _triggerFullScreen(status: status);
       }
 
       if (cumulativeDy > threshold) {
@@ -1191,7 +1206,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   void _onDoubleTapDown(TapDownDetails details) {
     switch (details.kind) {
       case ui.PointerDeviceKind.mouse when PlatformUtils.isDesktop:
-        plPlayerController.triggerFullScreen(status: !isFullScreen);
+        _triggerFullScreen(status: !isFullScreen);
       default:
         onDoubleTapDownMobile(details);
     }
@@ -1237,7 +1252,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             ..controlsLock.value = false
             ..showControls.value = false;
         }
-        plPlayerController.triggerFullScreen(
+        _triggerFullScreen(
           status: !isFullScreen,
           inAppFullScreen: isSecondaryBtn,
         );

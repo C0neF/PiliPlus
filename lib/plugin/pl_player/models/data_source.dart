@@ -15,7 +15,14 @@ class NetworkSource extends DataSource {
   NetworkSource({
     required super.videoSource,
     required super.audioSource,
+    this.userAgent,
+    this.referer,
+    this.headers,
   });
+
+  final String? userAgent;
+  final String? referer;
+  final Map<String, String>? headers;
 }
 
 class FileSource extends DataSource {

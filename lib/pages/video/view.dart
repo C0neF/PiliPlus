@@ -309,6 +309,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       ..addPositionListener(positionListener);
     if (plPlayerController.preInitPlayer) {
       if (plPlayerController.autoEnterFullScreen) {
+        videoDetailController.resetVideoHeaderForFullScreen();
         plPlayerController.triggerFullScreen();
       }
       return plPlayerController.play();

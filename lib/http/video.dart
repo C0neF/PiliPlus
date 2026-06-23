@@ -218,7 +218,7 @@ abstract final class VideoHttp {
       'ep_id': ?epid,
       'season_id': ?seasonId,
       'cid': cid,
-      'qn': qn ?? 80,
+      'qn': qn ?? 120,
       // 获取所有格式的视频
       'fnval': 4048,
       'fourk': 1,
@@ -229,6 +229,8 @@ abstract final class VideoHttp {
       'web_location': 1315873,
       // 免登录查看1080p
       if (tryLook) 'try_look': 1,
+      // 强制开启试看（解锁会员画质）
+      'is_need_trial': 1,
       'dm_img_list': '[]',
       'dm_img_str': dmImgStr,
       'dm_cover_img_str': dmCoverImgStr,
@@ -1053,7 +1055,8 @@ abstract final class VideoHttp {
       'platform': 'android',
       'playurl_type': playurlType,
       'protocol': 0,
-      'qn': qn ?? 80,
+      'qn': qn ?? 120,
+      'is_need_trial': 1,
     };
     AppSign.appSign(params);
     final res = await Request().get(Api.tvPlayUrl, queryParameters: params);

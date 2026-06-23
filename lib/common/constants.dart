@@ -23,6 +23,9 @@ abstract final class Constants {
   static const String userAgentApp =
       'Mozilla/5.0 BiliDroid/8.43.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/8430300 channel/master innerVer/8430300 osVer/15 network/2';
 
+  static const String userAgentPink =
+      'Mozilla/5.0 BiliDroid/7.76.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/7760700 channel/master innerVer/7760700 osVer/15 network/2';
+
   static const String statisticsApp =
       '{"appId":1,"platform":3,"version":"8.43.0","abtest":""}';
 

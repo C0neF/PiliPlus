@@ -12,8 +12,11 @@ import 'package:PiliPlus/utils/utils.dart';
 abstract final class GrpcHeaders {
   static const _build = 2001100;
   static const _versionName = '2.0.1';
+  static const _pinkBuild = 7760700;
+  static const _pinkVersionName = '7.76.0';
   static const _biliChannel = 'master';
   static const _mobiApp = 'android_hd';
+  static const _pinkMobiApp = 'android';
   static const _device = 'android';
 
   static String get _buvid => LoginUtils.buvid;
@@ -76,6 +79,46 @@ abstract final class GrpcHeaders {
           mobiApp: _mobiApp,
           device: _device,
           build: _build,
+          channel: _biliChannel,
+          buvid: _buvid,
+          platform: _device,
+        ).writeToBuffer(),
+      ),
+    };
+  }
+
+  static Map<String, String> newPinkHeaders([String? accessKey]) {
+    return {
+      ..._base,
+      'user-agent': Constants.userAgentPink,
+      'x-bili-device-bin': base64Encode(
+        Device(
+          appId: 1,
+          build: _pinkBuild,
+          buvid: _buvid,
+          mobiApp: _pinkMobiApp,
+          platform: _device,
+          channel: _biliChannel,
+          brand: _device,
+          model: _device,
+          osver: '15',
+          versionName: _pinkVersionName,
+        ).writeToBuffer(),
+      ),
+      if (accessKey != null) 'authorization': 'identify_v1 $accessKey',
+      'x-bili-fawkes-req-bin': base64Encode(
+        FawkesReq(
+          appkey: _pinkMobiApp,
+          env: 'prod',
+          sessionId: _sessionId,
+        ).writeToBuffer(),
+      ),
+      'x-bili-metadata-bin': base64Encode(
+        Metadata(
+          accessKey: accessKey,
+          mobiApp: _pinkMobiApp,
+          device: '',
+          build: _pinkBuild,
           channel: _biliChannel,
           buvid: _buvid,
           platform: _device,

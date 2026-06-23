@@ -4,7 +4,6 @@ import 'package:PiliPlus/models/common/video/audio_quality.dart';
 import 'package:PiliPlus/models/common/video/cdn_type.dart';
 import 'package:PiliPlus/models/common/video/live_quality.dart';
 import 'package:PiliPlus/models/common/video/video_decode_type.dart';
-import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
 import 'package:PiliPlus/pages/setting/widgets/ordered_multi_select_dialog.dart';
 import 'package:PiliPlus/pages/setting/widgets/select_dialog.dart';
@@ -14,6 +13,7 @@ import 'package:PiliPlus/utils/filtering_text.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/video_quality_menu.dart';
 import 'package:PiliPlus/utils/video_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -87,14 +87,14 @@ List<SettingsModel> get videoSettings => [
     title: '默认画质',
     leading: const Icon(Icons.video_settings_outlined),
     getSubtitle: () =>
-        '当前画质：${VideoQuality.fromCode(Pref.defaultVideoQa).desc}',
+        '当前画质：${videoQualitySettingLabelFromCode(Pref.defaultVideoQa)}',
     onTap: _showVideoQaDialog,
   ),
   NormalModel(
     title: '蜂窝网络画质',
     leading: const Icon(Icons.video_settings_outlined),
     getSubtitle: () =>
-        '当前画质：${VideoQuality.fromCode(Pref.defaultVideoQaCellular).desc}',
+        '当前画质：${videoQualitySettingLabelFromCode(Pref.defaultVideoQaCellular)}',
     onTap: _showVideoCellularQaDialog,
   ),
   NormalModel(
@@ -244,7 +244,7 @@ Future<void> _showVideoQaDialog(
     builder: (context) => SelectDialog<int>(
       title: '默认画质',
       value: Pref.defaultVideoQa,
-      values: VideoQuality.values.map((e) => (e.code, e.desc)).toList(),
+      values: buildVideoQualitySettingOptions(),
     ),
   );
   if (res != null) {
@@ -262,7 +262,7 @@ Future<void> _showVideoCellularQaDialog(
     builder: (context) => SelectDialog<int>(
       title: '蜂窝网络画质',
       value: Pref.defaultVideoQaCellular,
-      values: VideoQuality.values.map((e) => (e.code, e.desc)).toList(),
+      values: buildVideoQualitySettingOptions(),
     ),
   );
   if (res != null) {

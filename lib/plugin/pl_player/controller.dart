@@ -53,6 +53,7 @@ import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show HapticFeedback, DeviceOrientation;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -849,6 +850,12 @@ class PlPlayerController with BlockConfigMixin {
     if (dataSource is FileSource) {
       extras['cache'] = 'no';
     } else {
+      final networkSource = dataSource as NetworkSource;
+      player.setMediaHeader(
+        userAgent: networkSource.userAgent ?? BrowserUa.pc,
+        referer: networkSource.referer ?? HttpString.baseUrl,
+        headers: networkSource.headers,
+      );
       if (isLive) {
         extras.addAll(liveBuffer);
       } else {
@@ -1462,6 +1469,53 @@ class PlPlayerController with BlockConfigMixin {
     }
   }
 
+  bool? _targetLandscapeForFullScreen({
+    required bool isVertical,
+    DeviceOrientation? orientation,
+  }) {
+    if (orientation != null) {
+      return orientation == DeviceOrientation.landscapeLeft ||
+          orientation == DeviceOrientation.landscapeRight;
+    }
+    if (mode == .none || mode == .gravity) {
+      return null;
+    }
+    if (mode == .vertical ||
+        (mode == .auto && isVertical) ||
+        (mode == .ratio && (isVertical || screenRatio < kScreenRatio))) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _waitForViewOrientation(bool landscape) async {
+    const maxFrames = 30;
+    for (var i = 0; i < maxFrames; i++) {
+      await _waitForNextFrame();
+      final views = WidgetsBinding.instance.platformDispatcher.views;
+      if (views.isEmpty) {
+        return;
+      }
+      final size = views.first.physicalSize;
+      if (size.isEmpty) {
+        continue;
+      }
+      final isLandscape = size.width > size.height;
+      if (isLandscape == landscape) {
+        await _waitForNextFrame();
+        return;
+      }
+    }
+  }
+
+  Future<void> _waitForNextFrame() {
+    final binding = SchedulerBinding.instance;
+    if (!binding.hasScheduledFrame) {
+      binding.scheduleFrame();
+    }
+    return binding.endOfFrame;
+  }
+
   // 全屏
   bool _fsProcessing = false;
   Future<void> triggerFullScreen({
@@ -1484,6 +1538,15 @@ class PlPlayerController with BlockConfigMixin {
             isVertical: isVertical,
             orientation: orientation,
           );
+          final targetLandscape = _targetLandscapeForFullScreen(
+            isVertical: isVertical,
+            orientation: orientation,
+          );
+          if (targetLandscape == null) {
+            await _waitForNextFrame();
+          } else {
+            await _waitForViewOrientation(targetLandscape);
+          }
         } else {
           await enterDesktopFullScreen(inAppFullScreen: inAppFullScreen);
         }

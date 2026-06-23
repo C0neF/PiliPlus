@@ -12,7 +12,7 @@ abstract final class VideoUtils {
   static const _proxyTf = 'proxy-tf-all-ws.bilivideo.com';
 
   static final _mirrorRegex = RegExp(
-    r'^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)/upgcxcode',
+    r'^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)(?:\:\d{1,5})?/upgcxcode',
   );
 
   static final _mCdnTfRegex = RegExp(
@@ -46,7 +46,7 @@ abstract final class VideoUtils {
               (isAudio && disableAudioCDN)) {
             return url;
           }
-          return uri.replace(host: defaultCDNService.host).toString();
+          return _replaceCdnHost(uri, defaultCDNService.host!);
         }
       }
 
@@ -84,9 +84,14 @@ abstract final class VideoUtils {
                   host: _proxyTf,
                   queryParameters: {'url': mcdnTf},
                 ).toString()
-        : Uri.parse(mcdnUpgcxcode)
-              .replace(host: defaultCDNService.host ?? CDNService.ali.host)
-              .toString();
+        : _replaceCdnHost(
+            Uri.parse(mcdnUpgcxcode),
+            defaultCDNService.host ?? CDNService.ali.host!,
+          );
+  }
+
+  static String _replaceCdnHost(Uri uri, String host) {
+    return uri.replace(scheme: 'https', host: host, port: 443).toString();
   }
 
   static String getLiveCdnUrl(CodecItem e, {int index = 0}) {

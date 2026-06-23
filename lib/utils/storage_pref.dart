@@ -231,7 +231,7 @@ abstract final class Pref {
 
   static int get defaultVideoQaCellular => _setting.get(
     SettingBoxKey.defaultVideoQaCellular,
-    defaultValue: VideoQuality.high1080.code,
+    defaultValue: VideoQuality.super4K.code,
   );
 
   static int get defaultAudioQa => _setting.get(

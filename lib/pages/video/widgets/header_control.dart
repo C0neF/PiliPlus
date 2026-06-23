@@ -53,6 +53,7 @@ import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/storage_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
+import 'package:PiliPlus/utils/video_quality_menu.dart';
 import 'package:PiliPlus/utils/video_utils.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
@@ -883,22 +884,8 @@ class HeaderControlState extends State<HeaderControl>
     final VideoQuality? currentVideoQa = videoDetailCtr.currentVideoQa.value;
     if (currentVideoQa == null) return;
 
-    final List<FormatItem> videoFormat = videoInfo.supportFormats!;
-
-    /// 总质量分类
-    final int totalQaSam = videoFormat.length;
-
-    /// 可用的质量分类
-    int usefulQaSam = 0;
-    final List<VideoItem> video = videoInfo.dash!.video!;
-    final Set<int> idSet = {};
-    for (final VideoItem item in video) {
-      final int id = item.id!;
-      if (!idSet.contains(id)) {
-        idSet.add(id);
-        usefulQaSam++;
-      }
-    }
+    final videoFormat = buildVideoQualityMenuEntries(videoInfo);
+    if (videoFormat.isEmpty) return;
 
     showBottomSheet(
       (context, setState) {
@@ -934,25 +921,31 @@ class HeaderControlState extends State<HeaderControl>
                   ),
                 ),
                 SliverList.builder(
-                  itemCount: totalQaSam,
+                  itemCount: videoFormat.length,
                   itemBuilder: (context, index) {
                     final item = videoFormat[index];
-                    final isCurr = currentVideoQa.code == item.quality;
+                    final isCurr =
+                        currentVideoQa.code == item.quality && !item.isTrial;
                     return ListTile(
                       dense: true,
                       onTap: () async {
-                        if (isCurr) {
+                        if (currentVideoQa.code == item.quality) {
                           return;
                         }
                         Get.back();
-                        final int quality = item.quality!;
+                        final int quality = item.quality;
                         final newQa = VideoQuality.fromCode(quality);
-                        videoDetailCtr
-                          ..plPlayerController.cacheVideoQa = newQa.code
-                          ..currentVideoQa.value = newQa
-                          ..updatePlayer();
+                        final changed = await videoDetailCtr.changeVideoQuality(
+                          newQa,
+                          trial: item.isTrial,
+                        );
 
-                        SmartDialog.showToast("画质已变为：${newQa.desc}");
+                        if (!changed) {
+                          SmartDialog.showToast('${item.label}暂不可用');
+                          return;
+                        }
+
+                        SmartDialog.showToast('画质已变为：${newQa.desc}');
 
                         // update
                         if (!plPlayerController.tempPlayerConf) {
@@ -964,19 +957,18 @@ class HeaderControlState extends State<HeaderControl>
                           );
                         }
                       },
-                      // 可能包含会员解锁画质
-                      enabled: index >= totalQaSam - usefulQaSam,
+                      enabled: item.enabled,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 20,
                       ),
-                      title: Text(item.newDesc!),
+                      title: Text(item.label),
                       trailing: isCurr
                           ? Icon(
                               Icons.done,
                               color: theme.colorScheme.primary,
                             )
                           : Text(
-                              item.format!,
+                              item.format ?? '',
                               style: subTitleStyle,
                             ),
                     );

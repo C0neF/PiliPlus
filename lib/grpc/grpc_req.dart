@@ -5,6 +5,7 @@ import 'package:PiliPlus/grpc/bilibili/rpc.pb.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, compute;
@@ -57,11 +58,19 @@ abstract final class GrpcReq {
     GeneratedMessage request,
     T Function(Uint8List) grpcParser, {
     bool isolate = false,
+    Map<String, String>? headers,
+    bool skipAccount = false,
   }) async {
+    final requestOptions = headers == null && !skipAccount
+        ? options
+        : options.copyWith(
+            headers: headers,
+            extra: skipAccount ? {'account': const NoAccount()} : null,
+          );
     final response = await Request().post<Uint8List>(
       HttpString.appBaseUrl + url,
       data: compressProtobuf(request.writeToBuffer()),
-      options: options,
+      options: requestOptions,
     );
 
     if (response.data case final Map map) {
