@@ -1,4 +1,5 @@
 import 'package:PiliPlus/grpc/bilibili/app/playurl/v1.pb.dart' as grpc;
+import 'package:PiliPlus/grpc/bilibili/playershared.pb.dart' as shared;
 import 'package:PiliPlus/models/common/video/audio_quality.dart';
 import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
@@ -7,7 +8,23 @@ PlayUrlModel playViewReplyToPlayUrlModel(
   grpc.PlayViewReply reply, {
   int? requestedQuality,
 }) {
-  final videoInfo = reply.videoInfo;
+  return videoInfoToPlayUrlModel(
+    reply.videoInfo,
+    requestedQuality: requestedQuality,
+  );
+}
+
+PlayUrlModel vodInfoToPlayUrlModel(
+  shared.VodInfo vodInfo, {
+  int? requestedQuality,
+}) {
+  return videoInfoToPlayUrlModel(vodInfo, requestedQuality: requestedQuality);
+}
+
+PlayUrlModel videoInfoToPlayUrlModel(
+  dynamic videoInfo, {
+  int? requestedQuality,
+}) {
   final streams = videoInfo.streamList;
   final supportFormats = <FormatItem>[];
   final acceptQuality = <int>[];

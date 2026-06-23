@@ -1,4 +1,28 @@
+import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
+import 'package:flutter/foundation.dart';
+
+class PlayUrlMergeSource {
+  const PlayUrlMergeSource({
+    required this.load,
+    this.debugLabel,
+    this.requiresAppMediaHeaders = false,
+  });
+
+  final Future<LoadingState<PlayUrlModel>> Function() load;
+  final String? debugLabel;
+  final bool requiresAppMediaHeaders;
+}
+
+class PlayUrlMergeResult {
+  const PlayUrlMergeResult({
+    required this.success,
+    this.requiresAppMediaHeaders = false,
+  });
+
+  final bool success;
+  final bool requiresAppMediaHeaders;
+}
 
 bool mergePlayUrlDashStreams({
   required PlayUrlModel current,
@@ -52,4 +76,42 @@ bool mergePlayUrlDashStreams({
   }
 
   return true;
+}
+
+Future<PlayUrlMergeResult> mergePlayUrlDashStreamsFromSources({
+  required PlayUrlModel current,
+  required int quality,
+  required Iterable<PlayUrlMergeSource> sources,
+}) async {
+  for (final source in sources) {
+    final result = await source.load();
+    if (result case Success(:final response)) {
+      if (kDebugMode) {
+        final videos =
+            response.dash?.video
+                ?.map(
+                  (item) =>
+                      '${item.quality.code}:${item.width}x${item.height}:${item.codecs}',
+                )
+                .join(',') ??
+            'none';
+        debugPrint(
+          '[trial-merge] ${source.debugLabel ?? 'source'} q=$quality videos=$videos',
+        );
+      }
+      final merged = mergePlayUrlDashStreams(
+        current: current,
+        incoming: response,
+        quality: quality,
+      );
+      if (merged) {
+        return PlayUrlMergeResult(
+          success: true,
+          requiresAppMediaHeaders: source.requiresAppMediaHeaders,
+        );
+      }
+    }
+  }
+
+  return const PlayUrlMergeResult(success: false);
 }

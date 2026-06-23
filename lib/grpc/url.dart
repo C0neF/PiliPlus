@@ -51,6 +51,8 @@ abstract final class GrpcUrl {
   // video
   static const playUrl = '/bilibili.app.playurl.v1.PlayURL';
   static const playView = '$playUrl/PlayView';
+  static const playerUnite = '/bilibili.app.playerunite.v1.Player';
+  static const playViewUnite = '$playerUnite/PlayViewUnite';
 
   // audio
   static const audio = '/bilibili.app.listener.v1.Listener';

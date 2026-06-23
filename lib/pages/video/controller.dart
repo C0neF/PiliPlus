@@ -804,22 +804,51 @@ class VideoDetailController extends GetxController
       return false;
     }
 
-    final result = await VideoGrpc.playView(
-      aid: aid,
-      cid: cid.value,
-      qn: newQa.code,
-      voiceBalance: plPlayerController.enableAudioNormalization,
+    final merged = await mergePlayUrlDashStreamsFromSources(
+      current: data,
+      quality: newQa.code,
+      sources: [
+        PlayUrlMergeSource(
+          debugLabel: 'grpc',
+          load: () => VideoGrpc.playView(
+            aid: aid,
+            cid: cid.value,
+            qn: newQa.code,
+            voiceBalance: plPlayerController.enableAudioNormalization,
+          ),
+          requiresAppMediaHeaders: true,
+        ),
+        PlayUrlMergeSource(
+          debugLabel: 'web',
+          load: () => VideoHttp.videoUrl(
+            avid: aid,
+            bvid: bvid,
+            cid: cid.value,
+            qn: newQa.code,
+            tryLook: true,
+            videoType: VideoType.ugc,
+            language: currLang.value,
+            voiceBalance: plPlayerController.enableAudioNormalization,
+          ),
+        ),
+        PlayUrlMergeSource(
+          debugLabel: 'unite',
+          load: () => VideoGrpc.playViewUniteTrial(
+            aid: aid,
+            bvid: bvid,
+            cid: cid.value,
+            qn: newQa.code,
+            voiceBalance: plPlayerController.enableAudioNormalization,
+          ),
+          requiresAppMediaHeaders: true,
+        ),
+      ],
     );
-    if (result case Success(:final response)) {
-      final merged = mergePlayUrlDashStreams(
-        current: data,
-        incoming: response,
-        quality: newQa.code,
-      );
-      if (!merged) {
-        return false;
+
+    if (merged.success) {
+      if (merged.requiresAppMediaHeaders) {
+        _appMediaHeaderQualities.add(newQa.code);
       }
-      _appMediaHeaderQualities.add(newQa.code);
       return true;
     }
 

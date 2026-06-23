@@ -1,4 +1,5 @@
 import 'package:PiliPlus/grpc/bilibili/app/playurl/v1.pb.dart' as grpc;
+import 'package:PiliPlus/grpc/bilibili/playershared.pb.dart' as shared;
 import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/utils/playurl_grpc_converter.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -96,5 +97,57 @@ void main() {
     expect(model.acceptQuality, [VideoQuality.high108060.code]);
     expect(model.dash?.video?.single.id, VideoQuality.high108060.code);
     expect(model.dash?.video?.single.quality, VideoQuality.high108060);
+  });
+
+  test('converts PlayViewUnite vodInfo into playable video items', () {
+    final vodInfo = shared.VodInfo(
+      quality: VideoQuality.super4K.code,
+      timelength: Int64(1000),
+      streamList: [
+        shared.Stream(
+          streamInfo: shared.StreamInfo(
+            quality: VideoQuality.super4K.code,
+            format: 'flv',
+            newDescription: '4K 超高清',
+            displayDesc: '4K',
+          ),
+          dashVideo: shared.DashVideo(
+            baseUrl: 'https://example.com/unite-4k.m4s',
+            backupUrl: ['https://example.com/unite-4k-backup.m4s'],
+            bandwidth: 1000,
+            codecid: 12,
+            width: 3840,
+            height: 2160,
+            frameRate: '60.000',
+          ),
+        ),
+      ],
+      dashAudio: [
+        shared.DashItem(
+          id: 30280,
+          baseUrl: 'https://example.com/unite-audio.m4s',
+          bandwidth: 128000,
+          codecid: 0,
+        ),
+      ],
+    );
+
+    final model = vodInfoToPlayUrlModel(
+      vodInfo,
+      requestedQuality: VideoQuality.super4K.code,
+    );
+
+    expect(model.quality, VideoQuality.super4K.code);
+    expect(model.supportFormats?.single.quality, VideoQuality.super4K.code);
+    expect(model.dash?.video?.single.quality, VideoQuality.super4K);
+    expect(
+      model.dash?.video?.single.baseUrl,
+      'https://example.com/unite-4k.m4s',
+    );
+    expect(model.dash?.video?.single.codecs, 'hev1');
+    expect(
+      model.dash?.audio?.single.baseUrl,
+      'https://example.com/unite-audio.m4s',
+    );
   });
 }
