@@ -1,7 +1,6 @@
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/pages/webdav/webdav.dart';
 import 'package:PiliPlus/utils/storage.dart';
-import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -24,6 +23,21 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
   final _passwordCtr = TextEditingController(text: Pref.webdavPassword);
   final _directoryCtr = TextEditingController(text: Pref.webdavDirectory);
   bool _obscureText = true;
+
+  WebDavConfig _configFromInput() {
+    return WebDavConfig.fromInput(
+      uri: _uriCtr.text,
+      username: _usernameCtr.text,
+      password: _passwordCtr.text,
+      directory: _directoryCtr.text,
+    );
+  }
+
+  Future<WebDavConfig> _saveConfig() async {
+    final config = _configFromInput();
+    await GStorage.setting.putAll(config.toStorageMap());
+    return config;
+  }
 
   @override
   void dispose() {
@@ -101,7 +115,10 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
                           borderRadius: Style.mdRadius,
                         ),
                       ),
-                      onPressed: WebDav().backup,
+                      onPressed: () async {
+                        await _saveConfig();
+                        await WebDav().backup();
+                      },
                       child: const Text('备份设置'),
                     ),
                   ),
@@ -113,7 +130,10 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
                           borderRadius: Style.mdRadius,
                         ),
                       ),
-                      onPressed: WebDav().restore,
+                      onPressed: () async {
+                        await _saveConfig();
+                        await WebDav().restore();
+                      },
                       child: const Text('恢复设置'),
                     ),
                   ),
@@ -128,13 +148,10 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
             child: FloatingActionButton(
               child: const Icon(Icons.save),
               onPressed: () async {
-                await GStorage.setting.putAll({
-                  SettingBoxKey.webdavUri: _uriCtr.text,
-                  SettingBoxKey.webdavUsername: _usernameCtr.text,
-                  SettingBoxKey.webdavPassword: _passwordCtr.text,
-                  SettingBoxKey.webdavDirectory: _directoryCtr.text,
-                });
-                if (_uriCtr.text.isEmpty) {
+                final config = await _saveConfig();
+                final error = config.validate();
+                if (error != null) {
+                  SmartDialog.showToast('配置失败: $error');
                   return;
                 }
                 try {
